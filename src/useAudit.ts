@@ -20,7 +20,7 @@ function buildPredecessors(): Record<string, string[]> {
   const pred: Record<string, string[]> = {};
   for (const node of ALL_NODES) pred[node] = [];
   for (const edge of GRAPH_EDGES) {
-    pred[edge.to].push(edge.from);
+    (pred[edge.to] ??= []).push(edge.from);
   }
   return pred;
 }
@@ -82,7 +82,7 @@ export function useAudit(): UseAuditReturn {
       const inferred: string[] = [];
       for (const node of ALL_NODES) {
         if (completed.has(node) || errored.has(node)) continue;
-        const predecessors = PREDECESSORS[node];
+        const predecessors = PREDECESSORS[node] ?? [];
         const allPredDone = predecessors.every(
           (p) => completed.has(p) || errored.has(p),
         );

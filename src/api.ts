@@ -6,7 +6,23 @@ import type {
   UploadResponse,
 } from "./types";
 
-const BASE = "/api";
+const configuredBase = import.meta.env.VITE_API_BASE_URL?.trim();
+const defaultBase = import.meta.env.PROD ? "https://auditor.varad.fyi" : "";
+const apiBase = configuredBase || defaultBase;
+const BASE = `${apiBase.replace(/\/+$/, "")}/api`;
+const API_KEY_STORAGE = "compliance-auditor-key";
+
+export function getAccessKey(): string {
+  return sessionStorage.getItem(API_KEY_STORAGE) ?? "";
+}
+
+export function setAccessKey(key: string): void {
+  sessionStorage.setItem(API_KEY_STORAGE, key);
+}
+
+export function clearAccessKey(): void {
+  sessionStorage.removeItem(API_KEY_STORAGE);
+}
 
 export class ApiError extends Error {
   constructor(
@@ -22,19 +38,44 @@ async function handleResponse<T>(resp: Response): Promise<T> {
   if (!resp.ok) {
     let detail = `HTTP ${resp.status}`;
     try {
-      const body = await resp.json();
-      if (body.detail) detail = body.detail;
+      const body = await resp.json() as { detail?: string; error?: string };
+      detail = body.detail ?? body.error ?? detail;
     } catch {
       // ignore
+    }
+    if (resp.status === 401) {
+      clearAccessKey();
+      window.dispatchEvent(new Event("audit:unauthorized"));
     }
     throw new ApiError(resp.status, detail);
   }
   return resp.json() as Promise<T>;
 }
 
+async function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
+  const headers = new Headers(init.headers);
+  const accessKey = getAccessKey();
+  if (accessKey) headers.set("X-API-Key", accessKey);
+
+  return fetch(`${BASE}${path}`, {
+    ...init,
+    headers,
+  });
+}
+
+export async function verifyAccessKey(key: string): Promise<void> {
+  setAccessKey(key);
+  try {
+    await getStaticStatus();
+  } catch (error) {
+    clearAccessKey();
+    throw error;
+  }
+}
+
 /** POST /api/audit — synchronous audit (blocks until done). */
 export async function startAuditSync(repoUrl: string): Promise<AuditReport> {
-  const resp = await fetch(`${BASE}/audit`, {
+  const resp = await apiFetch("/audit", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ repo_url: repoUrl }),
@@ -46,7 +87,7 @@ export async function startAuditSync(repoUrl: string): Promise<AuditReport> {
 export async function startAuditAsync(
   repoUrl: string,
 ): Promise<StartAuditResponse> {
-  const resp = await fetch(`${BASE}/audit/start`, {
+  const resp = await apiFetch("/audit/start", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ repo_url: repoUrl }),
@@ -58,7 +99,7 @@ export async function startAuditAsync(
 export async function getAuditStatus(
   auditId: string,
 ): Promise<AuditStatus> {
-  const resp = await fetch(`${BASE}/audit/${auditId}/status`);
+  const resp = await apiFetch(`/audit/${auditId}/status`);
   return handleResponse<AuditStatus>(resp);
 }
 
@@ -66,13 +107,13 @@ export async function getAuditStatus(
 export async function getAuditResults(
   auditId: string,
 ): Promise<AuditReport> {
-  const resp = await fetch(`${BASE}/audit/${auditId}/results`);
+  const resp = await apiFetch(`/audit/${auditId}/results`);
   return handleResponse<AuditReport>(resp);
 }
 
 /** GET /api/audit/status — get static node list. */
 export async function getStaticStatus(): Promise<StaticStatusResponse> {
-  const resp = await fetch(`${BASE}/audit/status`);
+  const resp = await apiFetch("/audit/status");
   return handleResponse<StaticStatusResponse>(resp);
 }
 
@@ -82,10 +123,9 @@ export async function startAuditUpload(
 ): Promise<UploadResponse> {
   const form = new FormData();
   form.append("file", file);
-  const resp = await fetch(`${BASE}/audit/upload`, {
+  const resp = await apiFetch("/audit/upload", {
     method: "POST",
     body: form,
   });
   return handleResponse<UploadResponse>(resp);
 }
-

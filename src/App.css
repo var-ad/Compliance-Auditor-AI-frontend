@@ -112,6 +112,10 @@ code {
 
 .header__top {
   margin-bottom: var(--space-md);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
 }
 
 .header__brand {
@@ -150,10 +154,64 @@ code {
   text-transform: uppercase;
 }
 
+.header__logout {
+  padding: 7px 12px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: var(--white);
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.header__logout:hover {
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+  background: var(--surface);
+}
+
+/* ── Access gate ──────────────────────────────────────────────────────── */
+
 /* ── URL input form ────────────────────────────────────────────────────── */
 
 .header__form {
   margin-top: var(--space-sm);
+}
+
+.header__logout:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.access-key-row {
+  display: grid;
+  grid-template-columns: auto minmax(220px, 360px) 1fr;
+  gap: var(--space-sm);
+  align-items: center;
+  margin-bottom: var(--space-sm);
+}
+
+.access-key-row__label {
+  color: var(--text-secondary);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.access-key-row__input {
+  flex: initial;
+}
+
+.access-key-row__hint {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
+.access-key-row__error {
+  margin: calc(-1 * var(--space-xs)) 0 var(--space-sm);
+  color: var(--red);
+  font-size: 0.8rem;
 }
 
 .header__input-group {
@@ -560,6 +618,14 @@ code {
   .results__columns {
     grid-template-columns: 1fr;
   }
+
+  .access-key-row {
+    grid-template-columns: 1fr;
+  }
+
+  .access-key-row__hint {
+    margin-top: calc(-1 * var(--space-xs));
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -948,6 +1014,33 @@ code {
 .fc__line {
   color: var(--red);
   font-weight: 600;
+}
+
+.fc__controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.control-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 7px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+}
+
+.control-chip__framework {
+  color: var(--text-secondary);
+  font-weight: 700;
+}
+
+.control-chip__id {
+  color: var(--text-primary);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════

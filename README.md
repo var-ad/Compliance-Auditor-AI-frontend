@@ -24,7 +24,23 @@ npm run build
 # Output in dist/
 ```
 
-Serve the `dist/` folder from the backend's FastAPI server, or deploy to Vercel / Cloudflare Pages / S3.
+### Vercel
+
+Deploy this directory as the Vercel project root:
+
+1. The production build defaults to `https://auditor.varad.fyi`. Optionally
+   set `VITE_API_BASE_URL` in Vercel to override it.
+2. Add `complianceauditor.varad.fyi` under **Settings → Domains**.
+3. Point the DNS record requested by Vercel at Vercel.
+
+`vercel.json` configures the Vite build, SPA fallback, asset caching, and
+basic security headers. Local development continues to proxy `/api/*` to
+`http://localhost:8000`.
+
+The main audit form includes an access-key field for the backend
+`AUDIT_API_KEY`. The key is validated before an audit starts, stored only in
+`sessionStorage`, and attached as `X-API-Key` to API requests. Do not configure
+the access key as a Vercel or `VITE_*` environment variable.
 
 ## Architecture
 

@@ -73,6 +73,7 @@ export default function PipelineProgress({ nodes, elapsed, phase }: Props) {
       if (!from || !to) return null;
       const isActive = from.status === "completed" || from.status === "running";
       const isAnimated =
+        from.status === "running" ||
         to.status === "running" ||
         (to.status === "pending" && from.status === "completed");
       return { from, to, isActive, isAnimated };

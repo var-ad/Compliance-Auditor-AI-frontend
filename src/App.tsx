@@ -1,4 +1,5 @@
-import React, { useCallback, useRef } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { ApiError, clearAccessKey, getAccessKey, verifyAccessKey } from "./api";
 import type { InputType } from "./types";
 import { useAudit } from "./useAudit";
 import PipelineProgress from "./components/PipelineProgress";
@@ -10,11 +11,14 @@ import "./App.css";
 
 const INPUT_OPTIONS: { value: InputType; label: string }[] = [
   { value: "github", label: "GitHub" },
-  { value: "git",    label: "Git URL" },
-  { value: "zip",    label: "Upload ZIP" },
+  { value: "git", label: "Git URL" },
+  { value: "zip", label: "Upload ZIP" },
 ];
 
 export default function App() {
+  const [accessKey, setAccessKeyInput] = useState(() => getAccessKey());
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [isAuthenticating, setIsAuthenticating] = useState(false);
   const {
     phase,
     inputType,
@@ -32,15 +36,61 @@ export default function App() {
   } = useAudit();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-
   const isBusy = phase === "running" || phase === "starting";
 
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      setAccessKeyInput("");
+      setAuthError(
+        "Access key is invalid or expired. Enter it again to continue.",
+      );
+    };
+
+    window.addEventListener("audit:unauthorized", handleUnauthorized);
+    return () => {
+      window.removeEventListener("audit:unauthorized", handleUnauthorized);
+    };
+  }, []);
+
+  const verifyCurrentAccessKey = useCallback(async () => {
+    const key = accessKey.trim();
+    if (!key) {
+      setAuthError("Enter the access key before starting an audit.");
+      return false;
+    }
+
+    setIsAuthenticating(true);
+    setAuthError(null);
+    try {
+      await verifyAccessKey(key);
+      return true;
+    } catch (loginError) {
+      setAuthError(
+        loginError instanceof ApiError && loginError.status === 401
+          ? "Invalid access key."
+          : "Could not reach the auditor service. Please try again.",
+      );
+      return false;
+    } finally {
+      setIsAuthenticating(false);
+    }
+  }, [accessKey]);
+
+  const handleClearAccessKey = useCallback(() => {
+    if (isBusy) cancelAudit();
+    clearAccessKey();
+    setAccessKeyInput("");
+    setAuthError(null);
+  }, [cancelAudit, isBusy]);
+
   const handleSubmit = useCallback(
-    (e: React.FormEvent) => {
+    async (e: React.FormEvent) => {
       e.preventDefault();
+      const isKeyValid = await verifyCurrentAccessKey();
+      if (!isKeyValid) return;
       startAudit();
     },
-    [startAudit],
+    [startAudit, verifyCurrentAccessKey],
   );
 
   const handleFileChange = useCallback(
@@ -50,33 +100,43 @@ export default function App() {
     [setSelectedFile],
   );
 
-  const canSubmit = inputType === "zip"
-    ? selectedFile !== null
-    : repoUrl.trim().length > 0;
+  const canSubmit =
+    inputType === "zip" ? selectedFile !== null : repoUrl.trim().length > 0;
+  const canStartAudit =
+    canSubmit && accessKey.trim().length > 0 && !isAuthenticating;
 
   return (
     <div className="app">
-      {/* ── Header ────────────────────────────────── */}
       <header className="header">
         <div className="header__top">
           <div className="header__brand">
             <span className="header__logo">CA</span>
             <div>
-              <div className="header__title">Compliance Auditor</div>
+              <div className="header__title">Compliance Auditor AI</div>
               <div className="header__subtitle">
                 SOC 2 · ISO 27001 · GDPR · DPDP
               </div>
             </div>
           </div>
+          <button
+            type="button"
+            className="header__logout"
+            onClick={handleClearAccessKey}
+            disabled={!accessKey && !getAccessKey()}
+          >
+            Clear key
+          </button>
         </div>
 
-        {/* ── Input type tabs ────────────────────── */}
         <div className="input-tabs">
           {INPUT_OPTIONS.map((opt) => (
             <button
               key={opt.value}
               className={`input-tab ${inputType === opt.value ? "input-tab--active" : ""}`}
-              onClick={() => { setInputType(opt.value); setSelectedFile(null); }}
+              onClick={() => {
+                setInputType(opt.value);
+                setSelectedFile(null);
+              }}
               disabled={isBusy}
             >
               {opt.label}
@@ -84,8 +144,33 @@ export default function App() {
           ))}
         </div>
 
-        {/* ── Input form ─────────────────────────── */}
         <form className="header__form" onSubmit={handleSubmit}>
+          <div className="access-key-row">
+            <label className="access-key-row__label" htmlFor="access-key">
+              Access key
+            </label>
+            <input
+              id="access-key"
+              type="password"
+              className="header__input access-key-row__input"
+              value={accessKey}
+              onChange={(e) => {
+                setAccessKeyInput(e.target.value);
+                if (authError) setAuthError(null);
+              }}
+              placeholder="Required to run audits"
+              autoComplete="current-password"
+              disabled={isBusy || isAuthenticating}
+            />
+            <span className="access-key-row__hint">
+              Access is restricted to control API costs and server usage. Please
+              obtain an access key from Varad.
+            </span>
+          </div>
+          {authError && (
+            <div className="access-key-row__error">{authError}</div>
+          )}
+
           {inputType === "zip" ? (
             <div className="header__input-group">
               <div className="file-input-wrapper">
@@ -102,12 +187,20 @@ export default function App() {
                 </span>
               </div>
               {isBusy ? (
-                <button type="button" className="header__btn header__btn--cancel" onClick={cancelAudit}>
+                <button
+                  type="button"
+                  className="header__btn header__btn--cancel"
+                  onClick={cancelAudit}
+                >
                   Cancel
                 </button>
               ) : (
-                <button type="submit" className="header__btn header__btn--audit" disabled={!canSubmit}>
-                  Audit
+                <button
+                  type="submit"
+                  className="header__btn header__btn--audit"
+                  disabled={!canStartAudit}
+                >
+                  {isAuthenticating ? "Checking..." : "Audit"}
                 </button>
               )}
             </div>
@@ -126,12 +219,20 @@ export default function App() {
                 disabled={isBusy}
               />
               {isBusy ? (
-                <button type="button" className="header__btn header__btn--cancel" onClick={cancelAudit}>
+                <button
+                  type="button"
+                  className="header__btn header__btn--cancel"
+                  onClick={cancelAudit}
+                >
                   Cancel
                 </button>
               ) : (
-                <button type="submit" className="header__btn header__btn--audit" disabled={!canSubmit}>
-                  Audit
+                <button
+                  type="submit"
+                  className="header__btn header__btn--audit"
+                  disabled={!canStartAudit}
+                >
+                  {isAuthenticating ? "Checking..." : "Audit"}
                 </button>
               )}
             </div>
@@ -139,10 +240,8 @@ export default function App() {
         </form>
       </header>
 
-      {/* ── Pipeline Progress ─────────────────────── */}
       <PipelineProgress nodes={nodes} elapsed={elapsed} phase={phase} />
 
-      {/* ── Error ─────────────────────────────────── */}
       {error && (
         <div className="error-banner">
           <div className="error-banner__icon">!</div>
@@ -150,7 +249,6 @@ export default function App() {
         </div>
       )}
 
-      {/* ── Results ───────────────────────────────── */}
       {report && (
         <div className="results">
           <ScoreCards report={report} />
@@ -169,10 +267,8 @@ export default function App() {
         </div>
       )}
 
-      {/* ── Footer ────────────────────────────────── */}
       <footer className="footer">
-        <span>Compliance Auditor v1.0</span>
-        <span>Powered by LangGraph · Groq · Supabase</span>
+        <span>Compliance Auditor AI</span>
       </footer>
     </div>
   );

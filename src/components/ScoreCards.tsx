@@ -27,7 +27,7 @@ export default function ScoreCards({ report }: Props) {
       <div className="section-label">FRAMEWORK SCORES</div>
       <div className="score-cards__grid">
         {frameworks.map((fw) => {
-          const score = scores[fw];
+          const score = scores[fw] ?? 0;
           const controls = report.frameworks[fw]?.controls_triggered ?? 0;
           return (
             <div
